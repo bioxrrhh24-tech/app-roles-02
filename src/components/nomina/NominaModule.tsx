@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +15,6 @@ interface NominaModuleProps {
 }
 
 export default function NominaModule({ empleados, onUpdate, empresa }: NominaModuleProps) {
-  const [nombreInputs, setNombreInputs] = useState<Record<string, string>>({});
 
   const calcularAplicaFondoReserva = (fechaIngreso: string): boolean => {
     if (!fechaIngreso) return false;
@@ -123,24 +121,30 @@ export default function NominaModule({ empleados, onUpdate, empresa }: NominaMod
                   <td className="p-4 text-sm">{index + 1}</td>
                   <td className="p-4">
                     <Input
-                      value={nombreInputs[empleado.id] !== undefined ? nombreInputs[empleado.id] : `${empleado.apellidos} ${empleado.nombres}`.trim()}
+                      value={`${empleado.apellidos} ${empleado.nombres}`.trim()}
                       onChange={(e) => {
-                        const value = e.target.value;
-                        setNombreInputs({ ...nombreInputs, [empleado.id]: value });
-                      }}
-                      onBlur={(e) => {
                         const fullName = e.target.value.trim();
                         const lastSpace = fullName.lastIndexOf(' ');
 
-                        if (lastSpace > 0) {
-                          handleUpdate(empleado.id, "apellidos", fullName.substring(0, lastSpace));
-                          handleUpdate(empleado.id, "nombres", fullName.substring(lastSpace + 1));
-                        } else {
-                          handleUpdate(empleado.id, "apellidos", fullName);
-                          handleUpdate(empleado.id, "nombres", "");
-                        }
-
-                        setNombreInputs({ ...nombreInputs, [empleado.id]: undefined });
+                        const updated = empleados.map((emp) => {
+                          if (emp.id === empleado.id) {
+                            if (lastSpace > 0) {
+                              return {
+                                ...emp,
+                                apellidos: fullName.substring(0, lastSpace),
+                                nombres: fullName.substring(lastSpace + 1)
+                              };
+                            } else {
+                              return {
+                                ...emp,
+                                apellidos: fullName,
+                                nombres: ""
+                              };
+                            }
+                          }
+                          return emp;
+                        });
+                        onUpdate(updated);
                       }}
                       className="h-10 text-sm min-w-[250px]"
                       placeholder="Nombre completo"
