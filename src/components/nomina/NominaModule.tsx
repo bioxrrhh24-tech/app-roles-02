@@ -7,6 +7,7 @@ import { Empleado } from "@/types/nomina";
 import { Plus, X } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { nominaService } from "@/services/nominaService";
 
 interface NominaModuleProps {
   empleados: Empleado[];
@@ -15,7 +16,6 @@ interface NominaModuleProps {
 }
 
 export default function NominaModule({ empleados, onUpdate, empresa }: NominaModuleProps) {
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [nombreInputs, setNombreInputs] = useState<Record<string, string>>({});
 
   const calcularAplicaFondoReserva = (fechaIngreso: string): boolean => {
@@ -63,13 +63,24 @@ export default function NominaModule({ empleados, onUpdate, empresa }: NominaMod
       updates.tieneFondoReserva = calcularAplicaFondoReserva(value);
     }
 
+    if (field === "tieneFondoReserva" && value === true) {
+      updates.acumulaFondoReserva = true;
+    }
+
+    if (field === "tieneFondoReserva" && value === false) {
+      updates.acumulaFondoReserva = false;
+    }
+
     const updated = empleados.map((emp) =>
       emp.id === id ? { ...emp, ...updates } : emp
     );
     onUpdate(updated);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    if (!id.startsWith('emp-')) {
+      await nominaService.deleteEmpleado(id);
+    }
     onUpdate(empleados.filter((emp) => emp.id !== id));
   };
 
@@ -94,13 +105,11 @@ export default function NominaModule({ empleados, onUpdate, empresa }: NominaMod
             <thead>
               <tr className="border-b bg-muted">
                 <th className="text-left p-4 text-sm font-bold whitespace-nowrap">No.</th>
-                <th className="text-left p-4 text-sm font-bold whitespace-nowrap min-w-[250px]">Nombre Completo</th>
+                <th className="text-left p-4 text-sm font-bold whitespace-nowrap min-w-[250px]">Nombre</th>
                 <th className="text-left p-4 text-sm font-bold whitespace-nowrap min-w-[150px]">Cédula</th>
                 <th className="text-left p-4 text-sm font-bold whitespace-nowrap min-w-[180px]">Cargo</th>
                 <th className="text-left p-4 text-sm font-bold whitespace-nowrap min-w-[180px]">Asignación</th>
                 <th className="text-left p-4 text-sm font-bold whitespace-nowrap min-w-[150px]">Sueldo Nominal</th>
-                <th className="text-left p-4 text-sm font-bold whitespace-nowrap min-w-[140px]">Fecha de Entrada</th>
-                <th className="text-left p-4 text-sm font-bold whitespace-nowrap min-w-[140px]">Fecha de Salida</th>
                 <th className="text-left p-4 text-sm font-bold whitespace-nowrap">Estado</th>
                 <th className="text-center p-4 text-sm font-bold whitespace-nowrap">Aplica para Fondo de Reserva</th>
                 <th className="text-center p-4 text-sm font-bold whitespace-nowrap">Acumula Fondo</th>
@@ -118,9 +127,8 @@ export default function NominaModule({ empleados, onUpdate, empresa }: NominaMod
                       onChange={(e) => {
                         const value = e.target.value;
                         setNombreInputs({ ...nombreInputs, [empleado.id]: value });
-                      }}
-                      onBlur={(e) => {
-                        const fullName = e.target.value.trim();
+
+                        const fullName = value.trim();
                         const lastSpace = fullName.lastIndexOf(' ');
 
                         if (lastSpace > 0) {
@@ -130,13 +138,9 @@ export default function NominaModule({ empleados, onUpdate, empresa }: NominaMod
                           handleUpdate(empleado.id, "apellidos", fullName);
                           handleUpdate(empleado.id, "nombres", "");
                         }
-
-                        const newInputs = { ...nombreInputs };
-                        delete newInputs[empleado.id];
-                        setNombreInputs(newInputs);
                       }}
                       className="h-10 text-sm min-w-[250px]"
-                      placeholder="Apellidos Nombres"
+                      placeholder="Nombre completo"
                     />
                   </td>
                   <td className="p-4">
@@ -176,22 +180,6 @@ export default function NominaModule({ empleados, onUpdate, empresa }: NominaMod
                     />
                   </td>
                   <td className="p-4">
-                    <Input
-                      type="date"
-                      value={empleado.fechaIngreso}
-                      onChange={(e) => handleUpdate(empleado.id, "fechaIngreso", e.target.value)}
-                      className="h-10 text-sm min-w-[140px]"
-                    />
-                  </td>
-                  <td className="p-4">
-                    <Input
-                      type="date"
-                      value={empleado.fechaSalida || ""}
-                      onChange={(e) => handleUpdate(empleado.id, "fechaSalida", e.target.value || undefined)}
-                      className="h-10 text-sm min-w-[140px]"
-                    />
-                  </td>
-                  <td className="p-4">
                     <Badge
                       variant={empleado.activo ? "default" : "secondary"}
                       className="cursor-pointer select-none"
@@ -204,8 +192,7 @@ export default function NominaModule({ empleados, onUpdate, empresa }: NominaMod
                     <div className="flex justify-center items-center gap-2">
                       <Switch
                         checked={empleado.tieneFondoReserva}
-                        disabled
-                        className="opacity-100"
+                        onCheckedChange={(checked) => handleUpdate(empleado.id, "tieneFondoReserva", checked)}
                       />
                       {empleado.tieneFondoReserva && (
                         <span className="text-xs text-green-600 font-medium">Sí</span>
@@ -219,7 +206,8 @@ export default function NominaModule({ empleados, onUpdate, empresa }: NominaMod
                     <div className="flex justify-center">
                       <Switch
                         checked={empleado.acumulaFondoReserva}
-                        onCheckedChange={(checked) => handleUpdate(empleado.id, "acumulaFondoReserva", checked)}
+                        disabled
+                        className="opacity-100"
                       />
                     </div>
                   </td>

@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Empleado, RolPagosRow, DatosConfig } from "@/types/nomina";
+import { nominaService } from "@/services/nominaService";
 
 interface RolPagosModuleProps {
   empleados: Empleado[];
@@ -51,45 +52,55 @@ export default function RolPagosModule({ empleados, datos }: RolPagosModuleProps
   const empleadosActivos = empleados.filter((e) => e.activo);
 
   const [rolPagos, setRolPagos] = useState<Record<string, RolPagosRow>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const saveTimeoutRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
-    const initialRol: Record<string, RolPagosRow> = {};
-    empleadosActivos.forEach((emp) => {
-      if (!rolPagos[emp.id]) {
-        const baseRow: RolPagosRow = {
-          empleadoId: emp.id,
-          diasMes: datos.diasMes,
-          diasTrabajados: datos.diasMes,
-          sueldoNominal: emp.sueldoNominal,
-          horas50: 0,
-          horas100: 0,
-          bonificacion: 0,
-          viaticos: 0,
-          sueldo: 0,
-          valorHoras50: 0,
-          valorHoras100: 0,
-          decimoTercero: 0,
-          decimoCuarto: 0,
-          totalGanado: 0,
-          prestamosEmpleado: 0,
-          anticipoSueldo: 0,
-          retencionRenta: 0,
-          otrosDescuentos: 0,
-          prestamosIess: 0,
-          aportePersonal: 0,
-          totalDescuentos: 0,
-          subtotal: 0,
-          valorFondoReserva: 0,
-          depositoIess: 0,
-          netoRecibir: 0,
-        };
-        initialRol[emp.id] = calcularRolPagos(emp, baseRow, datos.diasMes);
-      } else {
-        initialRol[emp.id] = calcularRolPagos(emp, rolPagos[emp.id], datos.diasMes);
-      }
-    });
-    setRolPagos(initialRol);
-  }, [empleadosActivos.length, datos.diasMes]);
+    const loadRolPagos = async () => {
+      setIsLoading(true);
+      const savedRol = await nominaService.getRolPagos(datos.id);
+
+      const initialRol: Record<string, RolPagosRow> = {};
+      empleadosActivos.forEach((emp) => {
+        if (savedRol[emp.id]) {
+          initialRol[emp.id] = calcularRolPagos(emp, savedRol[emp.id], datos.diasMes);
+        } else {
+          const baseRow: RolPagosRow = {
+            empleadoId: emp.id,
+            diasMes: datos.diasMes,
+            diasTrabajados: datos.diasMes,
+            sueldoNominal: emp.sueldoNominal,
+            horas50: 0,
+            horas100: 0,
+            bonificacion: 0,
+            viaticos: 0,
+            sueldo: 0,
+            valorHoras50: 0,
+            valorHoras100: 0,
+            decimoTercero: 0,
+            decimoCuarto: 0,
+            totalGanado: 0,
+            prestamosEmpleado: 0,
+            anticipoSueldo: 0,
+            retencionRenta: 0,
+            otrosDescuentos: 0,
+            prestamosIess: 0,
+            aportePersonal: 0,
+            totalDescuentos: 0,
+            subtotal: 0,
+            valorFondoReserva: 0,
+            depositoIess: 0,
+            netoRecibir: 0,
+          };
+          initialRol[emp.id] = calcularRolPagos(emp, baseRow, datos.diasMes);
+        }
+      });
+      setRolPagos(initialRol);
+      setIsLoading(false);
+    };
+
+    loadRolPagos();
+  }, [empleadosActivos.length, datos.id, datos.diasMes]);
 
   const handleUpdate = (empleadoId: string, field: keyof RolPagosRow, value: number) => {
     const empleado = empleados.find((e) => e.id === empleadoId);
@@ -99,11 +110,32 @@ export default function RolPagosModule({ empleados, datos }: RolPagosModuleProps
     const recalculated = calcularRolPagos(empleado, updated, datos.diasMes);
 
     setRolPagos({ ...rolPagos, [empleadoId]: recalculated });
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      nominaService.saveRolPago(datos.id, recalculated);
+    }, 500);
   };
 
   const formatCurrency = (value: number) => {
     return value.toFixed(2);
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-center p-12">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="text-muted-foreground">Cargando rol de pagos...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -119,17 +151,16 @@ export default function RolPagosModule({ empleados, datos }: RolPagosModuleProps
           <table className="w-full text-sm min-w-max">
             <thead>
               <tr className="border-b bg-muted">
-                <th colSpan={6} className="text-center p-3 font-bold border-r">DATOS</th>
-                <th colSpan={10} className="text-center p-3 font-bold border-r">INGRESOS</th>
+                <th colSpan={5} className="text-center p-3 font-bold border-r">DATOS</th>
+                <th colSpan={13} className="text-center p-3 font-bold border-r">INGRESOS</th>
                 <th colSpan={8} className="text-center p-3 font-bold border-r">DESCUENTOS</th>
-                <th colSpan={6} className="text-center p-3 font-bold">LIQUIDACIÓN</th>
+                <th colSpan={3} className="text-center p-3 font-bold">LIQUIDACIÓN</th>
               </tr>
               <tr className="border-b bg-muted text-xs">
                 {/* DATOS */}
                 <th className="p-3 text-left whitespace-nowrap">No.</th>
                 <th className="p-3 text-left whitespace-nowrap min-w-[200px]">Nombre Completo</th>
                 <th className="p-3 text-left whitespace-nowrap min-w-[150px]">Cargo</th>
-                <th className="p-3 text-right whitespace-nowrap">Días Mes</th>
                 <th className="p-3 text-right whitespace-nowrap min-w-[100px]">Días Trabajados</th>
                 <th className="p-3 text-right border-r whitespace-nowrap min-w-[120px]">Sueldo Nominal</th>
 
@@ -141,6 +172,9 @@ export default function RolPagosModule({ empleados, datos }: RolPagosModuleProps
                 <th className="p-3 text-right whitespace-nowrap min-w-[120px]">Valor Horas 100%</th>
                 <th className="p-3 text-right whitespace-nowrap min-w-[120px]">Bonificación</th>
                 <th className="p-3 text-right whitespace-nowrap min-w-[120px]">Viáticos</th>
+                <th className="p-3 text-center whitespace-nowrap min-w-[100px]">Acumula Fondos</th>
+                <th className="p-3 text-center whitespace-nowrap min-w-[120px]">Mensualiza Décimos</th>
+                <th className="p-3 text-right whitespace-nowrap min-w-[130px]">Fondo de Reserva</th>
                 <th className="p-3 text-right whitespace-nowrap min-w-[100px]">Decimo Tercero Mensualizado</th>
                 <th className="p-3 text-right whitespace-nowrap min-w-[120px]">Décimo Cuarto Mensualizado</th>
                 <th className="p-3 text-right border-r whitespace-nowrap min-w-[130px]">Total Ganado</th>
@@ -156,11 +190,8 @@ export default function RolPagosModule({ empleados, datos }: RolPagosModuleProps
                 <th className="p-3 text-right border-r whitespace-nowrap min-w-[120px]">Subtotal</th>
 
                 {/* LIQUIDACIÓN */}
-                <th className="p-3 text-center whitespace-nowrap min-w-[100px]">Estado Empleado</th>
-                <th className="p-3 text-center whitespace-nowrap min-w-[120px]">Acumula Fondos</th>
-                <th className="p-3 text-center whitespace-nowrap min-w-[120px]">Mensualiza Décimos</th>
-                <th className="p-3 text-right whitespace-nowrap min-w-[130px]">Fondo Reserva</th>
                 <th className="p-3 text-right whitespace-nowrap min-w-[130px]">Depósito IESS</th>
+                <th className="p-3 text-center whitespace-nowrap min-w-[100px]">Estado Empleado</th>
                 <th className="p-3 text-right whitespace-nowrap min-w-[140px]">Neto a Recibir</th>
               </tr>
             </thead>
@@ -175,7 +206,6 @@ export default function RolPagosModule({ empleados, datos }: RolPagosModuleProps
                     <td className="p-3">{index + 1}</td>
                     <td className="p-3 font-medium">{`${empleado.apellidos} ${empleado.nombres}`}</td>
                     <td className="p-3 text-muted-foreground">{empleado.cargo}</td>
-                    <td className="p-3 text-right">{row.diasMes}</td>
                     <td className="p-3">
                       <Input
                         type="number"
@@ -229,6 +259,13 @@ export default function RolPagosModule({ empleados, datos }: RolPagosModuleProps
                         placeholder="0.00"
                       />
                     </td>
+                    <td className="p-3 text-center">
+                      <span className="text-xs">{empleado.acumulaFondoReserva ? 'Sí' : 'No'}</span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className="text-xs">{empleado.mensualizaDecimos ? 'Sí' : 'No'}</span>
+                    </td>
+                    <td className="p-3 text-right bg-muted/30 font-mono">${formatCurrency(row.valorFondoReserva)}</td>
                     <td className="p-3 text-right bg-muted/30 font-mono">${formatCurrency(row.decimoTercero)}</td>
                     <td className="p-3 text-right bg-muted/30 font-mono">${formatCurrency(row.decimoCuarto)}</td>
                     <td className="p-3 text-right bg-muted/30 font-mono font-semibold border-r">${formatCurrency(row.totalGanado)}</td>
@@ -289,18 +326,6 @@ export default function RolPagosModule({ empleados, datos }: RolPagosModuleProps
                     <td className="p-3 text-right bg-muted/30 font-mono border-r">${formatCurrency(row.subtotal)}</td>
 
                     {/* LIQUIDACIÓN */}
-                    <td className="p-3 text-center">
-                      <span className={`px-2 py-1 rounded text-xs ${empleado.activo ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                        {empleado.activo ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </td>
-                    <td className="p-3 text-center">
-                      <span className="text-xs">{empleado.acumulaFondoReserva ? 'Sí' : 'No'}</span>
-                    </td>
-                    <td className="p-3 text-center">
-                      <span className="text-xs">{empleado.mensualizaDecimos ? 'Sí' : 'No'}</span>
-                    </td>
-                    <td className="p-3 text-right bg-muted/30 font-mono">${formatCurrency(row.valorFondoReserva)}</td>
                     <td className="p-3">
                       <Input
                         type="number"
@@ -310,6 +335,11 @@ export default function RolPagosModule({ empleados, datos }: RolPagosModuleProps
                         step="0.01"
                         placeholder="0.00"
                       />
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className={`px-2 py-1 rounded text-xs ${empleado.activo ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                        {empleado.activo ? 'Activo' : 'Inactivo'}
+                      </span>
                     </td>
                     <td className="p-3 text-right bg-muted font-mono font-bold text-base">${formatCurrency(row.netoRecibir)}</td>
                   </tr>

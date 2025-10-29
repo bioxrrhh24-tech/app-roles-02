@@ -102,11 +102,6 @@ export default function DatosModule({ datos, onUpdate, onContinue }: DatosModule
           </div>
 
           <div className="pt-6 border-t space-y-4">
-            <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-              <span className="text-base font-medium">Días del mes:</span>
-              <span className="text-2xl font-bold">{localDatos.diasMes}</span>
-            </div>
-
             {isFormComplete(localDatos) ? (
               <Button
                 onClick={handleContinue}
