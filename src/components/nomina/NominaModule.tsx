@@ -127,8 +127,9 @@ export default function NominaModule({ empleados, onUpdate, empresa }: NominaMod
                       onChange={(e) => {
                         const value = e.target.value;
                         setNombreInputs({ ...nombreInputs, [empleado.id]: value });
-
-                        const fullName = value.trim();
+                      }}
+                      onBlur={(e) => {
+                        const fullName = e.target.value.trim();
                         const lastSpace = fullName.lastIndexOf(' ');
 
                         if (lastSpace > 0) {
@@ -138,6 +139,8 @@ export default function NominaModule({ empleados, onUpdate, empresa }: NominaMod
                           handleUpdate(empleado.id, "apellidos", fullName);
                           handleUpdate(empleado.id, "nombres", "");
                         }
+
+                        setNombreInputs({ ...nombreInputs, [empleado.id]: undefined });
                       }}
                       className="h-10 text-sm min-w-[250px]"
                       placeholder="Nombre completo"
